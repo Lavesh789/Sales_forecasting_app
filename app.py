@@ -52,6 +52,7 @@ day_of_year = st.sidebar.slider("Day of Year", 1, 365, 160)
 st.sidebar.markdown("---")
 # Flags & Operational Indicators
 promotion_flag = st.sidebar.radio("Promotion Active?", [0, 1], index=1)
+Quarter = st.sidebar.radio("Quarter?", 1, 2, 3, 4)
 local_event_flag = st.sidebar.radio("Local Event Active?", [0, 1], index=0)
 holiday_flag = st.sidebar.radio("Holiday Active?", [0, 1], index=0)
 has_holiday_name = st.sidebar.radio("Has Specific Holiday Name?", [0, 1], index=0)
@@ -77,9 +78,6 @@ if st.button("Generate Forecast", type="primary"):
         price_ratio = price / competitor_price if competitor_price > 0 else 1.0
         mkt_per_price = marketing_spend / price if price > 0 else 0.0
 
-        # Calculate Quarter explicitly
-        quarter = (month - 1) // 3 + 1
-
         # Cyclical transformations
         month_sin = np.sin(2 * np.pi * month / 12.0)
         dow_sin = np.sin(2 * np.pi * day_of_week / 7.0)
@@ -89,7 +87,7 @@ if st.button("Generate Forecast", type="primary"):
         promo_and_weekend = promotion_flag * is_weekend
         instock_and_promo = stock_avail * promotion_flag
 
-        # Construct DataFrame matching full model schema
+        # Construct DataFrame matching model schema
         input_data = pd.DataFrame([{
             'Price': price,
             'Competitor_Price': competitor_price,
@@ -104,7 +102,6 @@ if st.button("Generate Forecast", type="primary"):
             'Product_Name': product_name,
             'Customer_Segment': customer_segment,
             'Month': month,
-            'Quarter': quarter,
             'Day_of_Week': day_of_week,
             'DayOfYear': day_of_year,
             'Month_sin': month_sin,
