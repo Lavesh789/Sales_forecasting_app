@@ -43,7 +43,7 @@ customer_segment = st.sidebar.selectbox("Customer Segment", ["Standard", "Premiu
 
 st.sidebar.markdown("---")
 
-# 3. Pricing
+# 3. Pricing Features
 price = float(st.sidebar.number_input("Unit Price ($)", min_value=1.0, max_value=2000.0, value=25.0, step=0.5))
 competitor_price = float(st.sidebar.number_input("Competitor Price ($)", min_value=1.0, max_value=2000.0, value=26.5, step=0.5))
 discount_percentage = float(st.sidebar.slider("Discount Percentage (%)", min_value=0, max_value=100, value=10))
@@ -51,7 +51,7 @@ marketing_spend = float(st.sidebar.number_input("Marketing Spend ($)", min_value
 
 st.sidebar.markdown("---")
 
-# 4. Dates
+# 4. Temporal Features
 year = int(st.sidebar.selectbox("Year", [2024, 2025, 2026], index=2))
 month = int(st.sidebar.selectbox("Month", options=list(range(1, 13))))
 day = int(st.sidebar.slider("Day of Month", 1, 31, 15))
@@ -72,23 +72,26 @@ st.subheader("🤖 Future Sales Prediction & Business Metrics")
 
 if st.button("Generate Future Forecast", type="primary"):
     if model is not None:
-        # 1. Calculate Feature Values
+        # Derived Pricing Metrics
         discount_amount = float(price * (discount_percentage / 100.0))
         discounted_price = float(price - discount_amount)
         price_diff = float(price - competitor_price)
         price_ratio = float(price / competitor_price) if competitor_price > 0 else 1.0
         mkt_per_price = float(marketing_spend / price) if price > 0 else 0.0
 
+        # Derived Time Metrics
         quarter = float((month - 1) // 3 + 1)
         day_of_year = float((month - 1) * 30 + day)
         week_of_year = float(min(52, max(1, day_of_year // 7)))
         is_weekend = float(1.0 if day_of_week in [5, 6] else 0.0)
 
+        # Trigonometric Conversions
         month_sin = float(np.sin(2 * np.pi * month / 12.0))
         month_cos = float(np.cos(2 * np.pi * month / 12.0))
         dow_sin = float(np.sin(2 * np.pi * day_of_week / 7.0))
         dow_cos = float(np.cos(2 * np.pi * day_of_week / 7.0))
 
+        # Operational Interaction Indicators
         promotion_flag = float(1.0 if discount_percentage > 0 else 0.0)
         local_event_flag = 0.0
         holiday_flag = 0.0
@@ -99,7 +102,7 @@ if st.button("Generate Future Forecast", type="primary"):
         promo_and_holiday = float(promotion_flag * holiday_flag)
         instock_and_promo = float(stock_avail * promotion_flag)
 
-        # 2. Build Raw Dictionary
+        # Raw Feature Dictionary
         raw_feature_dict = {
             'Price': price,
             'Competitor_Price': competitor_price,
@@ -149,7 +152,7 @@ if st.button("Generate Future Forecast", type="primary"):
 
         input_df = pd.DataFrame([raw_feature_dict])
 
-        # 3. Extract Expected Features from Model
+        # Extract expected feature order directly from trained model
         expected_cols = None
         if hasattr(model, "feature_names_in_"):
             expected_cols = list(model.feature_names_in_)
@@ -159,45 +162,40 @@ if st.button("Generate Future Forecast", type="primary"):
                     expected_cols = list(step.feature_names_in_)
                     break
 
-        # Align columns to exact sequence expected by model
         if expected_cols:
             for col in expected_cols:
                 if col not in input_df.columns:
                     input_df[col] = 0.0
             input_df = input_df[expected_cols]
 
-        # 4. Safe Numerical Fallback Strategy
+        # Convert non-numeric text columns to numeric codes so numpy isnan never fails
+        for col in input_df.columns:
+            if input_df[col].dtype == 'object' or isinstance(input_df[col].iloc[0], str):
+                input_df[col] = input_df[col].astype('category').cat.codes.astype('float64')
+            else:
+                input_df[col] = input_df[col].astype('float64')
+
         try:
-            # First attempt: Predict directly with DataFrame
+            # Perform inference on clean numeric DataFrame
             prediction = model.predict(input_df)[0]
-        except Exception:
-            # Second attempt: Convert string categorical columns to numeric codes
-            # to resolve any 'isnan' numpy error on raw strings
-            encoded_df = input_df.copy()
-            for col in encoded_df.columns:
-                if encoded_df[col].dtype == 'object':
-                    # Convert string values to stable hash/numeric float codes
-                    encoded_df[col] = float(abs(hash(str(encoded_df[col].iloc[0]))) % 1000)
-                else:
-                    encoded_df[col] = encoded_df[col].astype('float64')
+            predicted_units = max(0, int(round(prediction)))
+            estimated_revenue = predicted_units * discounted_price
 
-            prediction = model.predict(encoded_df)[0]
+            # Render Outputs
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Predicted Future Units Sold", f"{predicted_units:,} units")
+            col2.metric("Discounted Unit Price", f"${discounted_price:.2f}")
+            col3.metric("Projected Total Revenue", f"${estimated_revenue:,.2f}")
 
-        # Render Results
-        predicted_units = max(0, int(round(prediction)))
-        estimated_revenue = predicted_units * discounted_price
+            st.success("✅ Forecast generated successfully!")
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Predicted Future Units Sold", f"{predicted_units:,} units")
-        col2.metric("Discounted Unit Price", f"${discounted_price:.2f}")
-        col3.metric("Projected Total Revenue", f"${estimated_revenue:,.2f}")
+            st.subheader("📦 Supply Chain & Inventory Strategy")
+            safety_stock = int(predicted_units * 0.15)
+            st.info(f"""
+            - **Target Inventory Stock:** {predicted_units + safety_stock:,} units
+            - **Safety Buffer (15%):** {safety_stock:,} units
+            - **Store:** {store_id} ({store_location}) | **Channel:** {sales_channel}
+            """)
 
-        st.success("✅ Forecast generated successfully!")
-
-        st.subheader("📦 Inventory Allocation Guidance")
-        safety_stock = int(predicted_units * 0.15)
-        st.info(f"""
-        - **Target Stock Allocation:** {predicted_units + safety_stock:,} units
-        - **Safety Buffer (15%):** {safety_stock:,} units
-        - **Store:** {store_id} ({store_location}) | **Channel:** {sales_channel}
-        """)
+        except Exception as e:
+            st.error(f"Prediction Error: {e}")
