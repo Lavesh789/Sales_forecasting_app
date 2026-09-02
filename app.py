@@ -40,9 +40,9 @@ discount = st.sidebar.slider("Discount Percentage (%)", min_value=0, max_value=5
 
 st.sidebar.subheader("Contextual Details")
 season = st.sidebar.selectbox("Season", ["Spring", "Summer", "Autumn", "Winter"])
-store_location = st.sidebar.selectbox("Store Location", ["Urban", "Suburban", "Rural"])
-sales_channel = st.sidebar.selectbox("Sales Channel", ["In-Store", "Online"])
-customer_segment = st.sidebar.selectbox("Customer Segment", ["Standard", "Premium", "VIP"])
+store_location = st.sidebar.selectbox("Store Location", ["Chennai", "Delhi", "Bengaluru", "Mumbai"])
+sales_channel = st.sidebar.selectbox("Sales Channel", ["In-Store", "Online", "Wholesale"])
+Quarter = st.sidebar.selectbox("Quarter", ["Q1", "Q2", "Q3", "Q4"])
 is_weekend = st.sidebar.radio("Weekend Sale?", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No")
 
 # Main Interface: Run Prediction
@@ -59,7 +59,7 @@ if st.button("Generate Forecast", type="primary"):
             'Season': season,
             'Store_Location': store_location,
             'Sales_Channel': sales_channel,
-            'Customer_Segment': customer_segment,
+            'Quarter': Quarter,
             'Is_Weekend': is_weekend
         }])
 
