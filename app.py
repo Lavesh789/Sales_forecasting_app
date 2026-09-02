@@ -113,8 +113,8 @@ if st.button("Generate Future Forecast", type="primary"):
         promo_and_holiday = promotion_flag * holiday_flag
         instock_and_promo = stock_avail * promotion_flag
 
-        # 4. Construct Complete Schema Input DataFrame
-        input_data = pd.DataFrame([{
+        # 4. Construct Full Feature Map
+        raw_feature_dict = {
             'Price': price,
             'Competitor_Price': competitor_price,
             'Discounted_Price': discounted_price,
@@ -157,8 +157,34 @@ if st.button("Generate Future Forecast", type="primary"):
             'InStock_and_Promo': instock_and_promo,
             'Units_Sold_Lag1': historical_units_sold,
             'Units_Sold_Lag7': historical_units_sold,
-            'Units_Sold_RollStd_4': 12.5
-        }])
+            'Units_Sold_RollStd_4': 12.5,
+            'Units_Sold_RollMean_4': float(historical_units_sold)
+        }
+
+        input_data = pd.DataFrame([raw_feature_dict])
+
+        # 5. Automated Pipeline Schema Alignment
+        # If the model metadata stores expected feature names, ensure exact column match & order
+        try:
+            expected_cols = None
+            if hasattr(model, "feature_names_in_"):
+                expected_cols = list(model.feature_names_in_)
+            elif hasattr(model, "named_steps"):
+                # Check first step or last step of Scikit-Learn pipeline
+                for step in model.named_steps.values():
+                    if hasattr(step, "feature_names_in_"):
+                        expected_cols = list(step.feature_names_in_)
+                        break
+
+            if expected_cols:
+                # Add any missing expected columns with default fallback
+                for col in expected_cols:
+                    if col not in input_data.columns:
+                        input_data[col] = 0
+                # Reorder columns to match the trained model sequence
+                input_data = input_data[expected_cols]
+        except Exception:
+            pass
 
         try:
             # Predict Future Volume
@@ -172,7 +198,7 @@ if st.button("Generate Future Forecast", type="primary"):
             col2.metric("Discounted Unit Price", f"${discounted_price:.2f}")
             col3.metric("Projected Revenue", f"${estimated_revenue:,.2f}")
 
-            st.success("✅ Forecast generated cleanly without errors!")
+            st.success("✅ Forecast generated successfully!")
 
             # Inventory Recommendation
             st.subheader("📦 Supply Chain & Inventory Allocation")
