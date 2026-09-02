@@ -21,10 +21,10 @@ to generate real-time predicted sales volume and expected revenue.
 @st.cache_resource
 def load_trained_model():
     try:
-        model = joblib.load('sales_model.pkl')
+        model = joblib.load('sales_forecast_model.pkl')
         return model
     except Exception as e:
-        st.error(f"Error loading model file 'sales_model.pkl': {e}")
+        st.error(f"Error loading model file 'sales_forecast_model.pkl': {e}")
         return None
 
 model = load_trained_model()
@@ -33,9 +33,9 @@ model = load_trained_model()
 st.sidebar.header("📊 Input Features")
 
 # Feature Inputs
-price = st.sidebar.number_input("Unit Price ($)", min_value=1.0, max_value=1000.0, value=25.0, step=0.5)
-marketing_spend = st.sidebar.number_input("Marketing Spend ($)", min_value=0.0, max_value=50000.0, value=500.0, step=50.0)
-competitor_price = st.sidebar.number_input("Competitor Price ($)", min_value=1.0, max_value=1000.0, value=26.5, step=0.5)
+price = st.sidebar.number_input("Unit Price (₹)", min_value=1.0, max_value=1000.0, value=25.0, step=0.5)
+marketing_spend = st.sidebar.number_input("Marketing Spend (₹)", min_value=0.0, max_value=50000.0, value=500.0, step=50.0)
+competitor_price = st.sidebar.number_input("Competitor Price (₹)", min_value=1.0, max_value=1000.0, value=26.5, step=0.5)
 discount = st.sidebar.slider("Discount Percentage (%)", min_value=0, max_value=50, value=10)
 
 st.sidebar.subheader("Contextual Details")
@@ -78,8 +78,8 @@ if st.button("Generate Forecast", type="primary"):
             # Display Key Metrics
             col1, col2, col3 = st.columns(3)
             col1.metric("Predicted Units Sold", f"{predicted_units:,} units")
-            col2.metric("Effective Unit Price", f"${effective_price:.2f}")
-            col3.metric("Estimated Revenue", f"${expected_revenue:,.2f}")
+            col2.metric("Effective Unit Price", f"₹{effective_price:.2f}")
+            col3.metric("Estimated Revenue", f"₹{expected_revenue:,.2f}")
 
             # Business Insight Output
             st.success("✅ Prediction generated successfully!")
@@ -88,8 +88,8 @@ if st.button("Generate Forecast", type="primary"):
             st.subheader("💡 Supply Chain & Inventory Recommendations")
             safety_stock = int(predicted_units * 0.15)
             st.info(f"""
-            - **Target Inventory Allocation:** {predicted_units + safety_stock:,} units (Includes 15% safety stock buffer: {safety_stock} units).
-            - **Promotional ROI:** Marketing spend of **${marketing_spend:,.2f}** yields an estimated return of **${expected_revenue:,.2f}**.
+            - Target Inventory Allocation: {predicted_units + safety_stock:,} units (Includes 15% safety stock buffer: {safety_stock} units).
+            - Promotional ROI: Marketing spend of ₹{marketing_spend:,.2f} yields an estimated return of ₹{expected_revenue:,.2f}.
             """)
 
             # Simple Visualization
@@ -98,15 +98,15 @@ if st.button("Generate Forecast", type="primary"):
             sim_revenues = [p * (1 - (discount / 100)) * predicted_units for p in sim_prices]
             
             chart_data = pd.DataFrame({
-                "Simulated Price ($)": sim_prices,
-                "Projected Revenue ($)": sim_revenues
+                "Simulated Price (₹)": sim_prices,
+                "Projected Revenue (₹)": sim_revenues
             })
-            st.line_chart(chart_data.set_index("Simulated Price ($)"))
+            st.line_chart(chart_data.set_index("Simulated Price (₹)"))
 
         except Exception as e:
             st.error(f"Prediction failed. Ensure feature columns match model inputs. Error detail: {e}")
     else:
-        st.warning("Model file `sales_model.pkl` not loaded correctly.")
+        st.warning("Model file `sales_forecastt_model.pkl` not loaded correctly.")
 
 # Footer
 st.markdown("---")
