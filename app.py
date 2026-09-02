@@ -11,7 +11,7 @@ st.title("Sales Demand Prediction")
 @st.cache_resource
 def load_pipeline():
     # Replace 'model.pkl' with the actual path to your saved .joblib or .pkl file
-    return joblib.load("model.pkl")
+    return joblib.load("sales_forecast_model.pkl")
 
 
 try:
