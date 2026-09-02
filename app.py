@@ -1,116 +1,94 @@
 import joblib
+import numpy as np
 import pandas as pd
 import streamlit as st
 
-# Set page title
-st.set_page_config(page_title="Sales Prediction App", layout="wide")
-st.title("Sales Demand Prediction")
+st.set_page_config(
+    page_title="Sales Forecasting Dashboard", layout="wide"
+)
+st.title("📈 Sales Demand & Revenue Forecasting")
 
 
-# Load trained pipeline from disk
 @st.cache_resource
-def load_pipeline():
-    # Replace 'model.pkl' with the actual path to your saved .joblib or .pkl file
+def load_forecasting_pipeline():
+    # Load your trained time-series / regression model pipeline
     return joblib.load("sales_forecast_model.pkl")
 
 
 try:
-    pipeline = load_pipeline()
-    st.success("Model loaded successfully!")
+    pipeline = load_forecasting_pipeline()
+    st.sidebar.success("Forecasting Model Loaded!")
 except Exception as e:
-    st.error(f"Error loading model: {e}")
+    st.sidebar.error(f"Error loading model file: {e}")
     st.stop()
 
-# Form inputs for key features
-with st.form("prediction_form"):
-    col1, col2, col3 = st.columns(3)
+# --- Input Parameters Section ---
+st.subheader("Select Parameters for Forecast")
+col1, col2, col3 = st.columns(3)
 
-    with col1:
-        product_id = st.text_input("Product ID", "P001")
-        category = st.selectbox("Category", ["Electronics", "Appliances", "Apparel"])
-        price = st.number_input("Price", value=1500.0)
-        discount = st.number_input("Discount %", value=10.0)
+with col1:
+    store_id = st.selectbox("Store ID", ["S001", "S002", "S003"])
+    product_category = st.selectbox(
+        "Category", ["Electronics", "Apparel", "Home & Kitchen"]
+    )
+    forecast_date = st.date_input("Target Forecast Date")
 
-    with col2:
-        store_id = st.text_input("Store ID", "S01")
-        day_of_week = st.selectbox(
-            "Day of Week",
-            [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ],
-        )
-        season = st.selectbox("Season", ["Winter", "Summer", "Monsoon", "Spring"])
-        channel = st.selectbox("Sales Channel", ["Online", "In-Store"])
+with col2:
+    unit_price = st.number_input("Unit Price ($)", value=49.99, min_value=0.0)
+    discount_pct = st.slider("Discount (%)", 0, 50, 10)
+    is_promo = st.checkbox("Active Promotion / Campaign", value=True)
 
-    with col3:
-        promo_flag = st.selectbox("Promotion Active", [1, 0])
-        stock_availability = st.selectbox("In Stock", [1, 0])
-        competitor_price = st.number_input("Competitor Price", value=1600.0)
-        marketing_spend = st.number_input("Marketing Spend", value=500.0)
+with col3:
+    lag_1_sales = st.number_input(
+        "Sales Yesterday (Units)", value=120, min_value=0
+    )
+    lag_7_sales = st.number_input(
+        "Sales Same Day Last Week (Units)", value=115, min_value=0
+    )
+    rolling_mean_7 = st.number_input(
+        "7-Day Avg Sales (Units)", value=118.0, min_value=0.0
+    )
 
-    submit = st.form_submit_button("Predict Sales")
+if st.button("Generate Forecast", type="primary"):
+    # Convert date inputs into datetime temporal features
+    dt = pd.to_datetime(forecast_date)
+    month = dt.month
+    day_of_week = dt.day_name()
+    day_of_year = dt.dayofyear
+    quarter = f"Q{dt.quarter}"
 
-if submit:
-    # Prepare input payload matching expected model columns
-    input_data = pd.DataFrame(
+    # Cyclic encoding for seasonality
+    month_sin = np.sin(2 * np.pi * month / 12.0)
+    month_cos = np.cos(2 * np.pi * month / 12.0)
+
+    # Build feature DataFrame expected by the pipeline
+    input_df = pd.DataFrame(
         [
             {
-                "Product_ID": product_id,
-                "Product_Name": "Sample Product",
-                "Category": category,
                 "Store_ID": store_id,
-                "Store_Location": "Bengaluru",
-                "Price": price,
-                "Discount_Percentage": discount,
-                "Promotion_Flag": promo_flag,
-                "Stock_Availability": stock_availability,
+                "Category": product_category,
+                "Unit_Price": unit_price,
+                "Discount_Percentage": discount_pct,
+                "Is_Promo": int(is_promo),
                 "Day_of_Week": day_of_week,
-                "Month": "January",
-                "Quarter": "Q1",
-                "Holiday_Flag": 0,
-                "Is_Weekend": 0,
-                "Season": season,
-                "Weather": "Clear",
-                "Local_Event_Flag": 0,
-                "Competitor_Price": competitor_price,
-                "Economic_Indicator": 1.0,
-                "Sales_Channel": channel,
-                "Customer_Segment": "Retail",
-                "Marketing_Spend": marketing_spend,
-                "Year": 2026,
-                "Day": 15,
-                "DayOfYear": 15,
-                "WeekOfYear": 3,
-                "Month_sin": 0.5,
-                "Month_cos": 0.86,
-                "DOW_sin": 0.0,
-                "DOW_cos": 1.0,
-                "Price_Diff_vs_Competitor": price - competitor_price,
-                "Price_Ratio_vs_Competitor": price / competitor_price
-                if competitor_price
-                else 1.0,
-                "Discounted_Price": price * (1 - discount / 100),
-                "Discount_Amount": price * (discount / 100),
-                "Marketing_Spend_per_Unit_Price": marketing_spend / price
-                if price
-                else 0,
-                "Promo_and_Weekend": 0,
-                "Promo_and_Holiday": 0,
-                "InStock_and_Promo": stock_availability * promo_flag,
-                "Units_Sold_Lag1": 10.0,
-                "Units_Sold_Lag7": 12.0,
-                "Units_Sold_RollMean_4": 11.0,
-                "Units_Sold_RollStd_4": 1.0,
-                "Has_Holiday_Name": 0,
+                "Month": month,
+                "Quarter": quarter,
+                "DayOfYear": day_of_year,
+                "Month_sin": month_sin,
+                "Month_cos": month_cos,
+                "Sales_Lag_1": lag_1_sales,
+                "Sales_Lag_7": lag_7_sales,
+                "Sales_RollMean_7": rolling_mean_7,
             }
         ]
     )
 
-    prediction = pipeline.predict(input_data)[0]
-    st.metric("Predicted Units Sold", f"{prediction:.2f}")
+    # Predict forecasted units and revenue
+    predicted_units = pipeline.predict(input_df)[0]
+    effective_price = unit_price * (1 - discount_pct / 100.0)
+    predicted_revenue = predicted_units * effective_price
+
+    # Display key metrics
+    res_col1, res_col2 = st.columns(2)
+    res_col1.metric("Forecasted Demand", f"{int(np.round(predicted_units))} Units")
+    res_col2.metric("Projected Revenue", f"${predicted_revenue:,.2f}")
