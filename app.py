@@ -108,6 +108,7 @@ if st.button("Generate Forecast", type="primary"):
             'DOW_sin': dow_sin,
             'DOW_cos': dow_cos,
             'Promotion_Flag': promotion_flag,
+            'Quarter': Quarter,
             'Local_Event_Flag': local_event_flag,
             'Holiday_Flag': holiday_flag,
             'Has_Holiday_Name': has_holiday_name,
