@@ -48,11 +48,11 @@ st.sidebar.markdown("---")
 month = st.sidebar.slider("Month", 1, 12, 6)
 day_of_week = st.sidebar.slider("Day of Week (0=Mon, 6=Sun)", 0, 6, 2)
 day_of_year = st.sidebar.slider("Day of Year", 1, 365, 160)
+Quarter = st.sidebar.slider("Quarter", 1, 2, 3, 4)
 
 st.sidebar.markdown("---")
 # Flags & Operational Indicators
 promotion_flag = st.sidebar.radio("Promotion Active?", [0, 1], index=1)
-Quarter = st.sidebar.radio("Quarter?", 1, 2, 3, 4)
 local_event_flag = st.sidebar.radio("Local Event Active?", [0, 1], index=0)
 holiday_flag = st.sidebar.radio("Holiday Active?", [0, 1], index=0)
 has_holiday_name = st.sidebar.radio("Has Specific Holiday Name?", [0, 1], index=0)
