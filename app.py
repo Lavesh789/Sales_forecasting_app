@@ -31,7 +31,7 @@ with col1:
     product_name = st.selectbox("Product Name", ["Bluetooth Speaker", "LED Desk Lamp", "Running Shoes", "Notebook Pack",
  "Wireless Mouse", "Yoga Mat", "Coffee Maker", "Office Chair"])
     category = st.selectbox(
-        "Category", ["Electronics", "Appliances", "Apparel"]
+        "Category", ["Electronics", "Appliances", "Apparel", "Sports", "Stationary", "Furniture", "home"]
     )
     store_id = st.selectbox("Store ID", ["S01","S02","S03","S04"])
     store_location = st.selectbox("Store Location", ["Bengaluru","Mumbai","Delhi","Chennai"])
