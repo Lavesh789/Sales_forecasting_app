@@ -2,59 +2,57 @@ import base64
 import os
 from datetime import datetime
 
+# Set Matplotlib to non-interactive 'Agg' backend BEFORE importing pyplot
+# This prevents GUI/threading issues on cloud servers like Render
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from flask import Flask, render_template_string, request
 from sklearn.linear_model import LinearRegression
 
-# ---------------------------------------------------------------------------
-# Flask App Setup
-# ---------------------------------------------------------------------------
 app = Flask(__name__)
 
-# Sample/mock dataset generation if the Excel file is missing
 DATASET_PATH = "Sales_Forcasting_Dataset.xlsx"
 
 
 def load_data():
-    """Loads dataset from Excel file or creates mock time-series sales data."""
+    """Loads dataset from Excel or generates mock data if missing."""
     if os.path.exists(DATASET_PATH):
-        df = pd.read_excel(DATASET_PATH)
-        df["Date"] = pd.to_datetime(df["Date"])
-    else:
-        # Fallback dataset if file isn't uploaded locally
-        dates = pd.date_range(start="2023-01-01", end="2026-08-31", freq="D")
-        np.random.seed(42)
-        sales = np.sin(np.linspace(0, 20, len(dates))) * 500 + np.random.normal(
-            2000, 300, len(dates)
-        )
-        df = pd.DataFrame(
-            {
-                "Date": dates,
-                "Units_Sold": np.random.randint(5, 100, size=len(dates)),
-                "Revenue": sales,
-                "Product_Name": np.random.choice(
-                    [
-                        "Bluetooth Speaker",
-                        "LED Desk Lamp",
-                        "Running Shoes",
-                        "Notebook Pack",
-                        "Wireless Mouse",
-                        "Yoga Mat",
-                        "Coffee Maker",
-                        "Office Chair",
-                    ],
-                    size=len(dates),
-                ),
-            }
-        )
-    return df
+        try:
+            df = pd.read_excel(DATASET_PATH)
+            df["Date"] = pd.to_datetime(df["Date"])
+            return df
+        except Exception as e:
+            print(f"Error loading excel file: {e}")
+
+    # Fallback dataset generator for continuous uptime
+    dates = pd.date_range(start="2023-01-01", end="2026-08-31", freq="D")
+    np.random.seed(42)
+    sales = np.sin(np.linspace(0, 20, len(dates))) * 500 + np.random.normal(
+        2000, 300, len(dates)
+    )
+    return pd.DataFrame(
+        {
+            "Date": dates,
+            "Units_Sold": np.random.randint(5, 100, size=len(dates)),
+            "Revenue": sales,
+            "Product_Name": np.random.choice(
+                [
+                    "Bluetooth Speaker",
+                    "LED Desk Lamp",
+                    "Running Shoes",
+                    "Notebook Pack",
+                    "Wireless Mouse",
+                ],
+                size=len(dates),
+            ),
+        }
+    )
 
 
-# ---------------------------------------------------------------------------
-# HTML Dashboard Template
-# ---------------------------------------------------------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -119,9 +117,6 @@ HTML_TEMPLATE = """
 """
 
 
-# ---------------------------------------------------------------------------
-# Route Handlers
-# ---------------------------------------------------------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
     df = load_data()
@@ -134,27 +129,22 @@ def index():
     selected_product = request.form.get("product", "All")
     forecast_days = int(request.form.get("days", 90))
 
-    # Filter data based on product selection
     if selected_product != "All" and "Product_Name" in df.columns:
         filtered_df = df[df["Product_Name"] == selected_product].copy()
     else:
         filtered_df = df.copy()
 
-    # Aggregate by Date
+    # Data aggregation
     daily_sales = filtered_df.groupby("Date")["Revenue"].sum().reset_index()
     daily_sales = daily_sales.sort_values("Date")
-
-    # Time Features for Linear Regression Model
     daily_sales["Ordinal_Date"] = daily_sales["Date"].map(datetime.toordinal)
 
+    # Forecasting model
     X = daily_sales[["Ordinal_Date"]]
     y = daily_sales["Revenue"]
-
-    # Model Training
     model = LinearRegression()
     model.fit(X, y)
 
-    # Future Date Predictions
     last_date = daily_sales["Date"].max()
     future_dates = pd.date_range(
         start=last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D"
@@ -162,26 +152,20 @@ def index():
     future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(
         -1, 1
     )
-    future_predictions = model.predict(future_ordinal)
-    future_predictions = np.maximum(
-        0, future_predictions
-    )  # Ensure non-negative sales
+    future_predictions = np.maximum(0, model.predict(future_ordinal))
 
     future_df = pd.DataFrame(
         {"Date": future_dates, "Revenue": future_predictions}
     )
 
-    # ---------------------------------------------------------------------------
-    # Plotting Historic & Future Predictions
-    # ---------------------------------------------------------------------------
+    # Plot generation
     fig, ax = plt.subplots(figsize=(10, 4.5), dpi=120)
 
-    # Resample to monthly for cleaner visual trend plotting
     monthly_historic = (
-        daily_sales.set_index("Date")["Revenue"].resample("M").sum()
+        daily_sales.set_index("Date")["Revenue"].resample("ME").sum()
     )
     monthly_future = (
-        future_df.set_index("Date")["Revenue"].resample("M").sum()
+        future_df.set_index("Date")["Revenue"].resample("ME").sum()
     )
 
     ax.plot(
@@ -211,15 +195,11 @@ def index():
     ax.grid(True, linestyle=":", alpha=0.6)
     fig.tight_layout()
 
-    # Save plot to buffer and encode base64
     img_buf = pd.io.common.BytesIO()
     fig.savefig(img_buf, format="png")
     img_buf.seek(0)
     plot_url = base64.b64encode(img_buf.getvalue()).decode("utf-8")
     plt.close(fig)
-
-    total_historic = daily_sales["Revenue"].sum()
-    total_forecast = future_df["Revenue"].sum()
 
     return render_template_string(
         HTML_TEMPLATE,
@@ -227,14 +207,13 @@ def index():
         selected_product=selected_product,
         forecast_days=forecast_days,
         plot_url=plot_url,
-        total_historic=total_historic,
-        total_forecast=total_forecast,
+        total_historic=daily_sales["Revenue"].sum(),
+        total_forecast=future_df["Revenue"].sum(),
     )
 
 
-# ---------------------------------------------------------------------------
-# App Execution
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Runs web server on port 5000
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Render binds dynamically to PORT env variable; fallback to 5000 locally
+    port = int(os.environ.get("PORT", 5000))
+    # debug=False and use_reloader=False prevent thread signal errors in hosted environments
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
