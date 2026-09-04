@@ -1,9 +1,8 @@
 streamlit
-flask
-gunicorn
 pandas
 numpy
 scikit-learn==1.6.1
 xgboost
+plotly
 joblib
 openpyxl
