@@ -29,7 +29,7 @@ def load_data():
     sales = np.sin(np.linspace(0, 20, len(dates))) * 500 + np.random.normal(
         2000, 300, len(dates)
     )
-    return pd.DataFrame({"Date": dates, "Revenue": sales})
+    return pd.DataFrame({"Date": dates, "Units_Sold": sales})
 
 
 df = load_data()
@@ -47,17 +47,17 @@ forecast_days = st.slider(
 Weekly_sales = (
     df.groupby("Date")["Units_Sold"].sum().reset_index().sort_values("Date")
 )
-daily_sales["Ordinal_Date"] = daily_sales["Date"].map(datetime.toordinal)
+Weekly_sales["Ordinal_Date"] = Weekly_sales["Date"].map(datetime.toordinal)
 
-X = daily_sales[["Week"]]
-y = daily_sales["Units_Sold"]
+X = Weekly_sales[["Week"]]
+y = Weekly_sales["Units_Sold"]
 
 model = GradientBoostingRegressor()
 model.fit(X, y)
 
-last_date = Weekly_sales["Date"].max()
-future_dates = pd.date_range(
-    start=last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D"
+last_Week = Weekly_sales["Date"].max()
+future_Week = pd.date_range(
+    start=last_Week + pd.Timedelta(days=7), periods=forecast_days, freq="D"
 )
 future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
 future_preds = np.maximum(0, model.predict(future_ordinal))
@@ -68,7 +68,7 @@ future_df = pd.DataFrame({"Date": future_dates, "Units_Sold": future_preds})
 fut_Weekly = future_df.set_index("Date")["Units_Sold"].resample("ME").sum()
 
 # Aligning Graph Data
-hist_x = [d.strftime("%Y-%w") for d in hist_monthly.index]
+hist_x = [d.strftime("%Y-%w") for d in hist_Weekly.index]
 hist_y = [round(v, 2) for v in hist_Weekly.values]
 
 fut_x = [hist_x[-1]] + [d.strftime("%Y-%w") for d in fut_Weekly.index]
