@@ -4,8 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-#from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="Sales Forecast", layout="centered")
 st.title("📈 Sales Forecasting Dashboard")
@@ -29,7 +28,7 @@ def load_data():
     sales = np.sin(np.linspace(0, 20, len(dates))) * 500 + np.random.normal(
         2000, 300, len(dates)
     )
-    return pd.DataFrame({"Date": dates, "Units_Sold": sales})
+    return pd.DataFrame({"Date": dates, "Revenue": sales})
 
 
 df = load_data()
@@ -44,35 +43,35 @@ forecast_days = st.slider(
 )
 
 # Model & Prediction
-Weekly_sales = (
-    df.groupby("Date")["Units_Sold"].sum().reset_index().sort_values("Date")
+daily_sales = (
+    df.groupby("Date")["Revenue"].sum().reset_index().sort_values("Date")
 )
-Weekly_sales["Ordinal_Date"] = Weekly_sales["Date"].map(datetime.toordinal)
+daily_sales["Ordinal_Date"] = daily_sales["Date"].map(datetime.toordinal)
 
-X = Weekly_sales[["Week"]]
-y = Weekly_sales["Units_Sold"]
+X = daily_sales[["Ordinal_Date"]]
+y = daily_sales["Revenue"]
 
-model = GradientBoostingRegressor()
+model = LinearRegression()
 model.fit(X, y)
 
-last_Week = Weekly_sales["Date"].max()
-future_Week = pd.date_range(
-    start=last_Week + pd.Timedelta(days=7), periods=forecast_days, freq="D"
+last_date = daily_sales["Date"].max()
+future_dates = pd.date_range(
+    start=last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D"
 )
 future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
 future_preds = np.maximum(0, model.predict(future_ordinal))
 
-# Weekly Resampling for Clean Visualization
-hist_Weekly = Weekly_sales.set_index("Date")["Units_Sold"].resample("ME").sum()
-future_df = pd.DataFrame({"Date": future_dates, "Units_Sold": future_preds})
-fut_Weekly = future_df.set_index("Date")["Units_Sold"].resample("ME").sum()
+# Monthly Resampling for Clean Visualization
+hist_monthly = daily_sales.set_index("Date")["Revenue"].resample("ME").sum()
+future_df = pd.DataFrame({"Date": future_dates, "Revenue": future_preds})
+fut_monthly = future_df.set_index("Date")["Revenue"].resample("ME").sum()
 
 # Aligning Graph Data
-hist_x = [d.strftime("%Y-%w") for d in hist_Weekly.index]
-hist_y = [round(v, 2) for v in hist_Weekly.values]
+hist_x = [d.strftime("%Y-%m") for d in hist_monthly.index]
+hist_y = [round(v, 2) for v in hist_monthly.values]
 
-fut_x = [hist_x[-1]] + [d.strftime("%Y-%w") for d in fut_Weekly.index]
-fut_y = [hist_y[-1]] + [round(v, 2) for v in fut_Weekly.values]
+fut_x = [hist_x[-1]] + [d.strftime("%Y-%m") for d in fut_monthly.index]
+fut_y = [hist_y[-1]] + [round(v, 2) for v in fut_monthly.values]
 
 # Plotting Interactive Chart
 fig = go.Figure()
@@ -90,9 +89,9 @@ fig.add_trace(
 )
 
 fig.update_layout(
-    title="Historical vs Predicted Units_Sold",
-    xaxis_title="Week",
-    yaxis_title="Units_Sold",
+    title="Historical vs Predicted Revenue",
+    xaxis_title="Date",
+    yaxis_title="Revenue",
 )
 
 st.plotly_chart(fig, use_container_width=True)
