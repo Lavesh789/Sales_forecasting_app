@@ -7,7 +7,7 @@ import streamlit as st
 from sklearn.ensemble import GradientBoostingRegressor
 
 st.set_page_config(page_title="Sales Forecast", layout="centered")
-st.title("📈 Weekly Sales Forecasting Dashboard")
+st.title("📈 Sales Forecasting Dashboard")
 
 DATASET_PATH = "Sales_Forcasting_Dataset.xlsx"
 
@@ -116,7 +116,7 @@ fig.add_trace(
         x=fut_x,
         y=fut_y,
         mode="lines+markers",
-        name="Future Gradient Boosting Prediction",
+        name="Future Prediction",
         line=dict(dash="dash", color="red", width=2),
     )
 )
