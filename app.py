@@ -5,6 +5,7 @@ import streamlit as st
 
 # Defensive check for scikit-learn
 try:
+    from sklearn.model_selection import train_test_split
     from sklearn.compose import ColumnTransformer
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.metrics import mean_absolute_error, r2_score
