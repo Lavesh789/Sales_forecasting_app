@@ -9,22 +9,12 @@ warnings.filterwarnings("ignore")
 
 # 1. Page Configuration
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
-st.title("📈 Sales Forecasting & Evaluation Dashboard")
+st.title("📈 Interactive Daily Sales Forecasting Dashboard")
 
 DATASET_PATH = "Sales_Forcasting_Dataset.xlsx"
 
 
-# 2. WMAPE Metric Calculation
-def calculate_wmape(y_true, y_pred):
-    y_true = np.asarray(y_true)
-    y_pred = np.clip(np.asarray(y_pred), 0, None)
-    sum_actuals = np.sum(np.abs(y_true))
-    if sum_actuals == 0:
-        return 0.0
-    return (np.sum(np.abs(y_true - y_pred)) / sum_actuals) * 100.0
-
-
-# 3. Load & Process Dataset
+# 2. Load & Process Dataset
 @st.cache_data
 def load_data():
     try:
@@ -46,7 +36,7 @@ def load_data():
     )
     daily.index.name = "Date"
 
-    # Robust Numerical Time-Series Features
+    # Numerical Time-Series Features
     daily["DayOfWeek"] = daily.index.dayofweek
     daily["DayOfMonth"] = daily.index.day
     daily["Month"] = daily.index.month
@@ -66,7 +56,65 @@ def load_data():
 
 daily_df = load_data()
 
-# 4. Split and Train Random Forest Model
+# 3. Interactive Sidebar Controls for Input Features
+st.sidebar.header("🎛️ Input Feature Controls")
+
+# Dropdown: Year Filter
+available_years = sorted(daily_df["Year"].unique().tolist())
+selected_year = st.sidebar.selectbox(
+    "Select Target Year",
+    options=["All Years"] + available_years,
+    index=0,
+)
+
+# Dropdown: Quarter Filter
+selected_quarter = st.sidebar.selectbox(
+    "Select Quarter",
+    options=["All Quarters", "Q1 (Jan-Mar)", "Q2 (Apr-Jun)", "Q3 (Jul-Sep)", "Q4 (Oct-Dec)"],
+    index=0,
+)
+
+# Dropdown: Day Type Filter
+day_type = st.sidebar.selectbox(
+    "Select Day Type",
+    options=["All Days", "Weekdays Only", "Weekends Only"],
+    index=0,
+)
+
+# Slider: Forecast Horizon
+forecast_days = st.sidebar.slider(
+    "Future Forecast Horizon (Days)",
+    min_value=7,
+    max_value=90,
+    value=90,
+    step=1,
+)
+
+# 4. Filter Dataset Based on Selected Dropdowns
+filtered_df = daily_df.copy()
+
+if selected_year != "All Years":
+    filtered_df = filtered_df[filtered_df["Year"] == int(selected_year)]
+
+if selected_quarter != "All Quarters":
+    q_map = {
+        "Q1 (Jan-Mar)": 1,
+        "Q2 (Apr-Jun)": 2,
+        "Q3 (Jul-Sep)": 3,
+        "Q4 (Oct-Dec)": 4,
+    }
+    filtered_df = filtered_df[filtered_df["Quarter"] == q_map[selected_quarter]]
+
+if day_type == "Weekdays Only":
+    filtered_df = filtered_df[filtered_df["Is_Weekend"] == 0]
+elif day_type == "Weekends Only":
+    filtered_df = filtered_df[filtered_df["Is_Weekend"] == 1]
+
+if filtered_df.empty:
+    st.warning("⚠️ No data available for the selected dropdown combination. Reverting to full dataset.")
+    filtered_df = daily_df.copy()
+
+# 5. Train Random Forest Model
 X = daily_df.drop(columns=["Units_Sold"])
 y = daily_df["Units_Sold"]
 
@@ -79,37 +127,20 @@ model = RandomForestRegressor(
 )
 model.fit(X_train, y_train)
 
-# Predictions & Metrics
-test_preds = model.predict(X_test)
-wmape_val = calculate_wmape(y_test.values, test_preds)
-accuracy = max(0.0, 100.0 - wmape_val)
-mae = np.mean(np.abs(y_test.values - test_preds))
-
-# 5. UI Controls & Top Metrics
-st.sidebar.header("Forecast Settings")
-forecast_days = st.sidebar.slider(
-    "Forecast Horizon (Days)",
-    min_value=7,
-    max_value=90,
-    value=90,
-    step=1,
-)
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🏆 Model", "Random Forest")
-col2.metric("🎯 Accuracy (WMAPE)", f"{accuracy:.2f}%")
-col3.metric("📉 WMAPE Error", f"{wmape_val:.2f}%")
-col4.metric("📊 MAE Score", f"{mae:.2f}")
+# Filtered Historical Evaluation Predictions
+eval_X = filtered_df.drop(columns=["Units_Sold"])
+eval_y = filtered_df["Units_Sold"]
+test_preds = model.predict(eval_X)
 
 st.markdown("---")
 
 # 6. Historical Evaluation Chart
-st.subheader("📊 Historical Evaluation: Actual vs Predictions")
+st.subheader("📊 Historical Predictions vs Actual Sales")
 comp_df = (
     pd.DataFrame(
         {
-            "Date": X_test.index,
-            "Actual Sales": y_test.values,
+            "Date": eval_X.index,
+            "Actual Sales": eval_y.values,
             "Predicted Sales": test_preds,
         }
     )
@@ -119,7 +150,7 @@ comp_df = (
 
 st.line_chart(comp_df)
 
-# 7. Iterative Future Forecast Loop (90 Days)
+# 7. Iterative Future Forecast Loop
 st.subheader(f"🔮 Future {forecast_days}-Day Sales Forecast")
 
 future_dates = pd.date_range(
@@ -158,7 +189,7 @@ for date in future_dates:
     pred_val = max(0.0, float(model.predict(feat_row)[0]))
     future_preds.append(pred_val)
 
-    # Append prediction to propagate lag features for the next step
+    # Append prediction to update lag rolling features
     new_entry = feat_row.copy()
     new_entry["Units_Sold"] = pred_val
     last_data = pd.concat([last_data, new_entry])
