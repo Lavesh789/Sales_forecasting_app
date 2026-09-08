@@ -3,13 +3,12 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
 
-# Streamlit Page Setup
-st.set_page_config(
-    page_title="Sales Forecasting Dashboard", page_layout="wide"
-)
+# Streamlit Page Setup (Fixed: layout="wide")
+st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
 st.title("📈 Daily Sales Forecasting & Model Evaluation")
 
 MODEL_PATH = "rf_model.joblib"
@@ -46,7 +45,7 @@ def load_and_prep_data():
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # 1. Basic Date/Time Features
+    # Date/Time Features
     df["Day_of_Week"] = df["Date"].dt.day_name()
     df["DayOfWeek"] = df["Date"].dt.dayofweek
     df["DayOfMonth"] = df["Date"].dt.day
@@ -57,7 +56,7 @@ def load_and_prep_data():
         lambda x: 1 if x in [5, 6] else 0
     )
 
-    # 2. Season Mapping
+    # Season Mapping
     def get_season(month):
         if month in [12, 1, 2]:
             return "Winter"
@@ -71,7 +70,7 @@ def load_and_prep_data():
     if "Season" not in df.columns:
         df["Season"] = df["Month"].apply(get_season)
 
-    # 3. Lag Features and Rolling Averages
+    # Lag Features and Rolling Averages
     df["Lag_1"] = df["Units_Sold"].shift(1)
     df["Lag_7"] = df["Units_Sold"].shift(7)
     df["Rolling_Mean_7"] = df["Units_Sold"].shift(1).rolling(window=7).mean()
@@ -89,20 +88,22 @@ df = load_and_prep_data()
 if hasattr(model, "feature_names_in_"):
     expected_cols = list(model.feature_names_in_)
 else:
-    # Exclude Target and Identifier columns if feature_names_in_ isn't available
     exclude_cols = ["Units_Sold", "Date"]
     expected_cols = [c for c in df.columns if c not in exclude_cols]
 
 # ---------------------------------------------------------------------------
-# 2. Historical Evaluation (Matches Notebook Train/Test Split)
+# 2. Historical Evaluation using train_test_split
 # ---------------------------------------------------------------------------
 X = df[expected_cols]
 y = df["Units_Sold"]
 
-split_idx = int(len(df) * 0.8)
-X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-test_dates = df["Date"].iloc[split_idx:]
+# Updated to train_test_split as requested
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Get matching dates for the test indices for plotting
+test_dates = df.loc[X_test.index, "Date"]
 
 # Predictions on Test Data
 test_preds = model.predict(X_test)
@@ -134,9 +135,16 @@ st.markdown("---")
 
 # Historical Actual vs Predicted Chart
 st.subheader("📊 Historical Evaluation: Actual vs Model Predictions")
-comp_df = pd.DataFrame(
-    {"Actual Sales": y_test.values, "Model Predictions": test_preds},
-    index=test_dates,
+comp_df = (
+    pd.DataFrame(
+        {
+            "Date": test_dates,
+            "Actual Sales": y_test.values,
+            "Model Predictions": test_preds,
+        }
+    )
+    .sort_values("Date")
+    .set_index("Date")
 )
 st.line_chart(comp_df)
 
@@ -152,12 +160,10 @@ future_dates = pd.date_range(
     freq="D",
 )
 
-# Template row copied from the latest entry to keep categorical variables intact
 latest_df = df.copy()
 future_preds = []
 
 for date in future_dates:
-    # Copy latest available row as a template for non-time features
     next_row = latest_df.iloc[-1:].copy()
     next_row["Date"] = date
 
@@ -183,7 +189,7 @@ for date in future_dates:
     pred_val = max(0.0, float(model.predict(X_future)[0]))
     future_preds.append(pred_val)
 
-    # Append predicted row back to latest_df for future lag propagation
+    # Append predicted row back for lag propagation
     next_row["Units_Sold"] = pred_val
     latest_df = pd.concat([latest_df, next_row], ignore_index=True)
 
