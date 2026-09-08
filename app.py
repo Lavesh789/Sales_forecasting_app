@@ -2,20 +2,29 @@ import warnings
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.metrics import make_scorer, mean_absolute_error, r2_score
-from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-
-warnings.filterwarnings("ignore")
 
 # Streamlit Page Config
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
 st.title("📈 Daily Sales Forecasting & Model Evaluation")
+
+# Defensive Import Check
+try:
+    from sklearn.compose import ColumnTransformer
+    from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+    from sklearn.metrics import make_scorer, mean_absolute_error, r2_score
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import OneHotEncoder
+    from xgboost import XGBRegressor
+    from lightgbm import LGBMRegressor
+except ModuleNotFoundError as e:
+    st.error(
+        f"⚠️ **Missing Dependency:** `{e.name}` is not installed.\n\n"
+        "Please create or update your `requirements.txt` file in your GitHub repository root with the required libraries."
+    )
+    st.stop()
+
+warnings.filterwarnings("ignore")
+
 
 # ---------------------------------------------------------------------------
 # 1. WMAPE Metric Definitions
@@ -29,31 +38,32 @@ def wmape(y_true, y_pred):
         return 0.0
     return (np.sum(np.abs(y_true - y_pred)) / sum_actuals) * 100.0
 
-def wmape_scorer_func(y_true, y_pred):
-    return -wmape(y_true, y_pred)
-
-wmape_scorer = make_scorer(wmape_scorer_func, greater_is_better=True)
 
 # ---------------------------------------------------------------------------
 # 2. Data Preparation
 # ---------------------------------------------------------------------------
 DATASET_PATH = "Sales_Forcasting_Dataset.xlsx"
 
+
 @st.cache_data
 def load_and_prep_data():
     try:
         df = pd.read_excel(DATASET_PATH)
     except Exception:
-        # Fallback dataset if file is absent
+        # Fallback synthetic dataset if file is absent
         dates = pd.date_range(start="2024-01-01", end="2026-08-31", freq="D")
         np.random.seed(42)
-        units = np.sin(np.linspace(0, 20, len(dates))) * 50 + np.random.normal(200, 30, len(dates))
+        units = np.sin(np.linspace(0, 20, len(dates))) * 50 + np.random.normal(
+            200, 30, len(dates)
+        )
         df = pd.DataFrame({"Date": dates, "Units_Sold": np.maximum(1, units)})
 
     df["Date"] = pd.to_datetime(df["Date"])
 
     # Continuous daily time-series indexing
-    daily = df.groupby("Date")["Units_Sold"].sum().asfreq("D", fill_value=0).to_frame()
+    daily = (
+        df.groupby("Date")["Units_Sold"].sum().asfreq("D", fill_value=0).to_frame()
+    )
     daily.index.name = "Date"
 
     # Feature Engineering
@@ -67,6 +77,7 @@ def load_and_prep_data():
 
     return daily.bfill().ffill()
 
+
 daily_df = load_and_prep_data()
 
 # ---------------------------------------------------------------------------
@@ -79,29 +90,64 @@ split_idx = int(len(daily_df) * 0.8)
 X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
 y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-cat_cols = X_train.select_dtypes(include=["object", "category"]).columns.tolist()
+cat_cols = X_train.select_dtypes(
+    include=["object", "category"]
+).columns.tolist()
 preprocessor = ColumnTransformer(
-    transformers=[("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), cat_cols)],
-    remainder="passthrough"
+    transformers=[
+        (
+            "cat",
+            OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+            cat_cols,
+        )
+    ],
+    remainder="passthrough",
 )
 
 models = {
     "Random Forest": Pipeline([
         ("prep", preprocessor),
-        ("model", RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1))
+        (
+            "model",
+            RandomForestRegressor(
+                n_estimators=200, random_state=42, n_jobs=-1
+            ),
+        ),
     ]),
     "XGBoost": Pipeline([
         ("prep", preprocessor),
-        ("model", XGBRegressor(n_estimators=200, learning_rate=0.05, random_state=42, n_jobs=-1))
+        (
+            "model",
+            XGBRegressor(
+                n_estimators=200,
+                learning_rate=0.05,
+                random_state=42,
+                n_jobs=-1,
+            ),
+        ),
     ]),
     "LightGBM": Pipeline([
         ("prep", preprocessor),
-        ("model", LGBMRegressor(n_estimators=200, learning_rate=0.05, random_state=42, n_jobs=-1, verbose=-1))
+        (
+            "model",
+            LGBMRegressor(
+                n_estimators=200,
+                learning_rate=0.05,
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1,
+            ),
+        ),
     ]),
     "Gradient Boosting": Pipeline([
         ("prep", preprocessor),
-        ("model", GradientBoostingRegressor(n_estimators=200, learning_rate=0.05, random_state=42))
-    ])
+        (
+            "model",
+            GradientBoostingRegressor(
+                n_estimators=200, learning_rate=0.05, random_state=42
+            ),
+        ),
+    ]),
 }
 
 # Evaluate Pipelines
@@ -123,7 +169,7 @@ for name, pipe in models.items():
         "WMAPE": wmape_val,
         "Accuracy": accuracy,
         "MAE": mae,
-        "R2": r2
+        "R2": r2,
     }
 
 # Identify Best Model based on WMAPE Accuracy
@@ -147,10 +193,13 @@ st.markdown("---")
 
 # Historical Chart via native Streamlit Engine
 st.subheader("📊 Historical Evaluation: Actual vs Model Predictions")
-comp_df = pd.DataFrame({
-    "Actual Sales": y_test.values,
-    f"{best_model_name} (Predicted)": predictions[best_model_name]
-}, index=X_test.index)
+comp_df = pd.DataFrame(
+    {
+        "Actual Sales": y_test.values,
+        f"{best_model_name} (Predicted)": predictions[best_model_name],
+    },
+    index=X_test.index,
+)
 
 st.line_chart(comp_df)
 
@@ -159,25 +208,38 @@ st.line_chart(comp_df)
 # ---------------------------------------------------------------------------
 st.subheader(f"🔮 Future {forecast_days}-Day Sales Forecast")
 
-future_dates = pd.date_range(start=daily_df.index[-1] + pd.Timedelta(days=1), periods=forecast_days, freq="D")
+future_dates = pd.date_range(
+    start=daily_df.index[-1] + pd.Timedelta(days=1),
+    periods=forecast_days,
+    freq="D",
+)
 future_preds = []
 last_data = daily_df.copy()
 
 for date in future_dates:
     last_row = last_data.iloc[-1]
     lag_1 = last_row["Units_Sold"]
-    lag_7 = last_data.iloc[-7]["Units_Sold"] if len(last_data) >= 7 else last_row["Units_Sold"]
+    lag_7 = (
+        last_data.iloc[-7]["Units_Sold"]
+        if len(last_data) >= 7
+        else last_row["Units_Sold"]
+    )
     rolling_7 = last_data["Units_Sold"].tail(7).mean()
 
-    feat_df = pd.DataFrame([{
-        "DayOfWeek": date.dayofweek,
-        "Month": date.month,
-        "Year": date.year,
-        "DayOfMonth": date.day,
-        "Lag_1": lag_1,
-        "Lag_7": lag_7,
-        "Rolling_Mean_7": rolling_7
-    }], index=[date])
+    feat_df = pd.DataFrame(
+        [
+            {
+                "DayOfWeek": date.dayofweek,
+                "Month": date.month,
+                "Year": date.year,
+                "DayOfMonth": date.day,
+                "Lag_1": lag_1,
+                "Lag_7": lag_7,
+                "Rolling_Mean_7": rolling_7,
+            }
+        ],
+        index=[date],
+    )
 
     pred_val = max(0.0, float(best_pipeline.predict(feat_df)[0]))
     future_preds.append(pred_val)
@@ -186,7 +248,9 @@ for date in future_dates:
     new_row["Units_Sold"] = pred_val
     last_data = pd.concat([last_data, pd.DataFrame([new_row], index=[date])])
 
-forecast_df = pd.DataFrame({"Forecasted Units": future_preds}, index=future_dates)
+forecast_df = pd.DataFrame(
+    {"Forecasted Units": future_preds}, index=future_dates
+)
 
 st.line_chart(forecast_df)
 
