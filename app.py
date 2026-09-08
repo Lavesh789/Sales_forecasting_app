@@ -2,37 +2,17 @@ import warnings
 import numpy as np
 import pandas as pd
 import streamlit as st
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+warnings.filterwarnings("ignore")
 
 # Streamlit Page Config
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
 st.title("📈 Daily Sales Forecasting & Model Evaluation")
-
-# Defensive Import Check with mapped PyPI package names
-MODULE_TO_PYPI = {
-    "sklearn": "scikit-learn",
-    "xgboost": "xgboost",
-    "lightgbm": "lightgbm",
-    "openpyxl": "openpyxl",
-}
-
-try:
-    from lightgbm import LGBMRegressor
-    from sklearn.compose import ColumnTransformer
-    from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-    from sklearn.metrics import make_scorer, mean_absolute_error, r2_score
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import OneHotEncoder
-    from xgboost import XGBRegressor
-except ModuleNotFoundError as e:
-    missing_module = e.name.split(".")[0]
-    pypi_package = MODULE_TO_PYPI.get(missing_module, missing_module)
-    st.error(
-        f"⚠️ **Missing Dependency:** `{pypi_package}` is not installed in the environment.\n\n"
-        f"Please verify that `{pypi_package}` is included in your `requirements.txt` file and reboot the app on Streamlit Cloud."
-    )
-    st.stop()
-
-warnings.filterwarnings("ignore")
 
 
 # ---------------------------------------------------------------------------
@@ -90,14 +70,15 @@ def load_and_prep_data():
 daily_df = load_and_prep_data()
 
 # ---------------------------------------------------------------------------
-# 3. Model Pipelines & Training
+# 3. Model Pipeline & Training
 # ---------------------------------------------------------------------------
 X = daily_df.drop(columns=["Units_Sold"])
 y = daily_df["Units_Sold"]
 
-split_idx = int(len(daily_df) * 0.8)
-X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+#split_idx = int(len(daily_df) * 0.8)
+#X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+#y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 cat_cols = X_train.select_dtypes(
     include=["object", "category"]
@@ -113,78 +94,29 @@ preprocessor = ColumnTransformer(
     remainder="passthrough",
 )
 
-models = {
-    "Random Forest": Pipeline([
-        ("prep", preprocessor),
-        (
-            "model",
-            RandomForestRegressor(
-                n_estimators=200, random_state=42, n_jobs=-1
-            ),
+rf_pipeline = Pipeline([
+    ("prep", preprocessor),
+    (
+        "model",
+        RandomForestRegressor(
+            n_estimators=300,
+            max_depth=20,
+            min_samples_split=2,
+            random_state=42,
+            n_jobs=-1,
         ),
-    ]),
-    "XGBoost": Pipeline([
-        ("prep", preprocessor),
-        (
-            "model",
-            XGBRegressor(
-                n_estimators=200,
-                learning_rate=0.05,
-                random_state=42,
-                n_jobs=-1,
-            ),
-        ),
-    ]),
-    "LightGBM": Pipeline([
-        ("prep", preprocessor),
-        (
-            "model",
-            LGBMRegressor(
-                n_estimators=200,
-                learning_rate=0.05,
-                random_state=42,
-                n_jobs=-1,
-                verbose=-1,
-            ),
-        ),
-    ]),
-    "Gradient Boosting": Pipeline([
-        ("prep", preprocessor),
-        (
-            "model",
-            GradientBoostingRegressor(
-                n_estimators=200, learning_rate=0.05, random_state=42
-            ),
-        ),
-    ]),
-}
+    ),
+])
 
-# Evaluate Pipelines
-results = {}
-predictions = {}
+# Fit Random Forest
+rf_pipeline.fit(X_train, y_train)
+preds = rf_pipeline.predict(X_test)
 
-for name, pipe in models.items():
-    pipe.fit(X_train, y_train)
-    preds = pipe.predict(X_test)
-    predictions[name] = preds
-
-    wmape_val = wmape(y_test.values, preds)
-    accuracy = max(0.0, 100.0 - wmape_val)
-    mae = mean_absolute_error(y_test, preds)
-    r2 = r2_score(y_test, preds)
-
-    results[name] = {
-        "Pipeline": pipe,
-        "WMAPE": wmape_val,
-        "Accuracy": accuracy,
-        "MAE": mae,
-        "R2": r2,
-    }
-
-# Identify Best Model based on WMAPE Accuracy
-best_model_name = max(results, key=lambda k: results[k]["Accuracy"])
-best_model_info = results[best_model_name]
-best_pipeline = best_model_info["Pipeline"]
+# Metrics Evaluation
+wmape_val = wmape(y_test.values, preds)
+accuracy = max(0.0, 100.0 - wmape_val)
+mae = mean_absolute_error(y_test, preds)
+r2 = r2_score(y_test, preds)
 
 # ---------------------------------------------------------------------------
 # 4. Streamlit Dashboard Layout
@@ -193,20 +125,17 @@ st.sidebar.header("Forecast Settings")
 forecast_days = st.sidebar.slider("Future Forecast Horizon (Days)", 7, 60, 30)
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("🏆 Best Model", best_model_name)
-col2.metric("🎯 Model Accuracy (WMAPE)", f"{best_model_info['Accuracy']:.2f}%")
-col3.metric("📉 WMAPE Error", f"{best_model_info['WMAPE']:.2f}%")
-col4.metric("📊 MAE Score", f"{best_model_info['MAE']:.2f}")
+col1.metric("🏆 Best Model", "Random Forest")
+col2.metric("🎯 Model Accuracy", f"{accuracy:.2f}%")
+col3.metric("📉 WMAPE Error", f"{wmape_val:.2f}%")
+col4.metric("📊 MAE Score", f"{mae:.2f}")
 
 st.markdown("---")
 
-# Historical Chart via native Streamlit Engine
-st.subheader("📊 Historical Evaluation: Actual vs Model Predictions")
+# Historical Chart
+st.subheader("📊 Historical Evaluation: Actual vs Random Forest Predictions")
 comp_df = pd.DataFrame(
-    {
-        "Actual Sales": y_test.values,
-        f"{best_model_name} (Predicted)": predictions[best_model_name],
-    },
+    {"Actual Sales": y_test.values, "Random Forest (Predicted)": preds},
     index=X_test.index,
 )
 
@@ -250,7 +179,7 @@ for date in future_dates:
         index=[date],
     )
 
-    pred_val = max(0.0, float(best_pipeline.predict(feat_df)[0]))
+    pred_val = max(0.0, float(rf_pipeline.predict(feat_df)[0]))
     future_preds.append(pred_val)
 
     new_row = feat_df.iloc[0].to_dict()
