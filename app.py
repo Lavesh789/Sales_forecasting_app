@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore")
 
 # Streamlit Page Config
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
-st.title("📈 Daily Sales Forecasting & Model Evaluation (Random Forest)")
+st.title("📈 Daily Sales Forecasting & Model Evaluation")
 
 
 # ---------------------------------------------------------------------------
