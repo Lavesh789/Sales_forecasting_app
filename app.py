@@ -2,17 +2,27 @@ import warnings
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+
+# Defensive check for scikit-learn
+try:
+    from sklearn.compose import ColumnTransformer
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.metrics import mean_absolute_error, r2_score
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import OneHotEncoder
+except ImportError:
+    st.error(
+        "⚠️ **scikit-learn** is missing from the environment.\n\n"
+        "Please ensure `scikit-learn` is listed in your `requirements.txt` file on GitHub, "
+        "then click **Manage app -> Reboot app** in the bottom right corner."
+    )
+    st.stop()
 
 warnings.filterwarnings("ignore")
 
 # Streamlit Page Config
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
-st.title("📈 Daily Sales Forecasting & Model Evaluation")
+st.title("📈 Daily Sales Forecasting & Model Evaluation (Random Forest)")
 
 
 # ---------------------------------------------------------------------------
@@ -124,11 +134,10 @@ r2 = r2_score(y_test, preds)
 st.sidebar.header("Forecast Settings")
 forecast_days = st.sidebar.slider("Future Forecast Horizon (Days)", 7, 60, 30)
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("🏆 Best Model", "Random Forest")
-col2.metric("🎯 Model Accuracy", f"{accuracy:.2f}%")
-col3.metric("📉 WMAPE Error", f"{wmape_val:.2f}%")
-col4.metric("📊 MAE Score", f"{mae:.2f}")
+col1, col2, col3 = st.columns(3)
+col1.metric("🏆 Model", "Random Forest")
+col2.metric("🎯 Accuracy", f"{accuracy:.2f}%")
+col3.metric("📉 WMAPE", f"{wmape_val:.2f}%")
 
 st.markdown("---")
 
