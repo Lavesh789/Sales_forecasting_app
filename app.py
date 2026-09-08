@@ -7,19 +7,28 @@ import streamlit as st
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
 st.title("📈 Daily Sales Forecasting & Model Evaluation")
 
-# Defensive Import Check
+# Defensive Import Check with mapped PyPI package names
+MODULE_TO_PYPI = {
+    "sklearn": "scikit-learn",
+    "xgboost": "xgboost",
+    "lightgbm": "lightgbm",
+    "openpyxl": "openpyxl",
+}
+
 try:
+    from lightgbm import LGBMRegressor
     from sklearn.compose import ColumnTransformer
     from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
     from sklearn.metrics import make_scorer, mean_absolute_error, r2_score
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import OneHotEncoder
     from xgboost import XGBRegressor
-    from lightgbm import LGBMRegressor
 except ModuleNotFoundError as e:
+    missing_module = e.name.split(".")[0]
+    pypi_package = MODULE_TO_PYPI.get(missing_module, missing_module)
     st.error(
-        f"⚠️ **Missing Dependency:** `{e.name}` is not installed.\n\n"
-        "Please create or update your `requirements.txt` file in your GitHub repository root with the required libraries."
+        f"⚠️ **Missing Dependency:** `{pypi_package}` is not installed in the environment.\n\n"
+        f"Please verify that `{pypi_package}` is included in your `requirements.txt` file and reboot the app on Streamlit Cloud."
     )
     st.stop()
 
