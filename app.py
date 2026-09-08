@@ -21,10 +21,10 @@ to generate real-time predicted sales volume and expected revenue.
 @st.cache_resource
 def load_trained_model():
     try:
-        model = joblib.load('sales_model.pkl')
+        model = joblib.load('sales_forecast_model.pkl')
         return model
     except Exception as e:
-        st.error(f"Error loading model file 'sales_model.pkl': {e}")
+        st.error(f"Error loading model file 'sales_forecast_model.pkl': {e}")
         return None
 
 model = load_trained_model()
@@ -106,7 +106,7 @@ if st.button("Generate Forecast", type="primary"):
         except Exception as e:
             st.error(f"Prediction failed. Ensure feature columns match model inputs. Error detail: {e}")
     else:
-        st.warning("Model file `sales_model.pkl` not loaded correctly.")
+        st.warning("Model file `sales_forecast_model.pkl` not loaded correctly.")
 
 # Footer
 st.markdown("---")
