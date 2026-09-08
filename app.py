@@ -75,10 +75,9 @@ daily_df = load_and_prep_data()
 X = daily_df.drop(columns=["Units_Sold"])
 y = daily_df["Units_Sold"]
 
-#split_idx = int(len(daily_df) * 0.8)
-#X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-#y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+split_idx = int(len(daily_df) * 0.8)
+X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
 # Predictions on Test Data
 test_preds = model.predict(X_test)
