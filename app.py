@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore")
 
-# Streamlit Page Setup (Fixed: layout="wide")
+# Streamlit Page Setup
 st.set_page_config(page_title="Sales Forecasting Dashboard", layout="wide")
 st.title("📈 Daily Sales Forecasting & Model Evaluation")
 
@@ -77,6 +77,11 @@ def load_and_prep_data():
 
     # Clean missing values resulting from shifts/rolling windows
     df = df.bfill().ffill()
+
+    # FIX: Cast all string/object columns to str to prevent OneHotEncoder isnan error
+    for col in df.select_dtypes(include=["object", "category"]).columns:
+        df[col] = df[col].fillna("").astype(str)
+
     return df
 
 
@@ -97,7 +102,7 @@ else:
 X = df[expected_cols]
 y = df["Units_Sold"]
 
-# Updated to train_test_split as requested
+# Split data
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
@@ -168,7 +173,7 @@ for date in future_dates:
     next_row["Date"] = date
 
     # Update date-based features
-    next_row["Day_of_Week"] = date.day_name()
+    next_row["Day_of_Week"] = str(date.day_name())
     next_row["DayOfWeek"] = date.dayofweek
     next_row["DayOfMonth"] = date.day
     next_row["Month"] = date.month
@@ -183,6 +188,10 @@ for date in future_dates:
         last_units.iloc[-7] if len(latest_df) >= 7 else last_units.iloc[-1]
     )
     next_row["Rolling_Mean_7"] = last_units.tail(7).mean()
+
+    # Ensure object columns remain string-typed in next_row
+    for col in next_row.select_dtypes(include=["object", "category"]).columns:
+        next_row[col] = next_row[col].fillna("").astype(str)
 
     # Predict future day
     X_future = next_row[expected_cols]
